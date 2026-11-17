@@ -1,0 +1,32 @@
+name: Tesla takip
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: takip
+jobs:
+  kontrol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q requests curl_cffi
+      - name: Kontrol et
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TZ: Europe/Istanbul
+        run: |
+          if [ -z "$TELEGRAM_TOKEN" ]; then echo "Token yok, atlaniyor"; exit 0; fi
+          python tesla_takip.py
+      - name: Durumu kaydet
+        if: always()
+        run: |
+          git config user.name "tesla-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add durum.json 2>/dev/null || true
+          git diff --cached --quiet || (git commit -qm "durum" && git push -q)
