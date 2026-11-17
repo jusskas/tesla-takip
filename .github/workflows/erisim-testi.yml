@@ -7,5 +7,35 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -q requests curl_cffi
-      - run: python -c "import tesla_takip as t; print('TESLA_TOPLAM', t.fetch_cars()[0])"
+      - run: pip install -q requests curl_cffi playwright && python -m playwright install --with-deps chromium >/dev/null
+      - name: curl denemeleri
+        run: |
+          cat > d.py <<'EOF'
+          import json,urllib.parse
+          from curl_cffi import requests as r
+          import tesla_takip as t
+          u=t.API_URL+"?query="+urllib.parse.quote(json.dumps(t.QUERY,separators=(",",":")))
+          for imp in ["chrome","chrome131","safari17_0","firefox133"]:
+              try:
+                  s=r.Session(impersonate=imp)
+                  a=s.get("https://www.tesla.com/tr_TR/inventory/used/my",timeout=30).status_code
+                  b=s.get(u,headers={"Accept":"application/json","Referer":t.PAGE_URL},timeout=30)
+                  print("SONUC",imp,"sayfa",a,"api",b.status_code,b.text[:80])
+              except Exception as e:
+                  print("SONUC",imp,"HATA",e)
+          
+          EOF
+          python d.py
+      - name: playwright denemesi
+        run: |
+          cat > p.py <<'EOF'
+          import json,urllib.parse,tesla_takip as t
+          from playwright.sync_api import sync_playwright
+          u=t.API_URL+"?query="+urllib.parse.quote(json.dumps(t.QUERY,separators=(",",":")))
+          with sync_playwright() as p:
+              b=p.chromium.launch(); pg=b.new_page()
+              r1=pg.goto(t.PAGE_URL,timeout=60000); print("SONUC pw sayfa",r1.status)
+              res=pg.evaluate("u=>fetch(u).then(r=>r.status+' '+r.headers.get('content-type')).catch(e=>'ERR '+e)",u.replace("https://www.tesla.com",""))
+              print("SONUC pw api",res)
+          EOF
+          python p.py
